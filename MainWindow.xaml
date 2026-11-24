@@ -2757,7 +2757,9 @@
                                     <StackPanel x:Name="RamFractionPanel" Orientation="Horizontal" IsEnabled="False">
                                         <RadioButton Style="{StaticResource Chip}" GroupName="Ram" Content="40%" Tag="0.4" Margin="0,0,6,0"/>
                                         <RadioButton Style="{StaticResource Chip}" GroupName="Ram" Content="60%" Tag="0.6" Margin="0,0,6,0" IsChecked="True"/>
-                                        <RadioButton Style="{StaticResource Chip}" GroupName="Ram" Content="80%" Tag="0.8" Margin="0"/>
+                                        <RadioButton Style="{StaticResource Chip}" GroupName="Ram" Content="80%" Tag="0.8" Margin="0,0,6,0"/>
+                                        <RadioButton Style="{StaticResource Chip}" GroupName="Ram" Content="90%" Tag="0.9" Margin="0"
+                                                     ToolTip="Mais memória testada (como o TestMem5). O Windows pode ficar lento durante o teste."/>
                                     </StackPanel>
                                 </StackPanel>
                                 <StackPanel Margin="0,0,20,0">
@@ -2882,7 +2884,7 @@
                             <StackPanel>
                                 <TextBlock Text="RAM" Style="{StaticResource Label}"/>
                                 <TextBlock x:Name="StRam" Text="—" Style="{StaticResource StatValue}"/>
-                                <TextBlock Text="passes / erros" Style="{StaticResource StatSub}"/>
+                                <TextBlock x:Name="StRamSub" Text="ciclos / erros" Style="{StaticResource StatSub}" TextWrapping="Wrap"/>
                             </StackPanel>
                         </Border>
                     </UniformGrid>

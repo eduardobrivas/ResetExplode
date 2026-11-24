@@ -2,18 +2,26 @@ using System.Management;
 
 namespace ResetExplode;
 
-/// <summary>Gera carga sintética de CPU (todos os threads) e/ou RAM (escrita + verificação).</summary>
+/// <summary>Gera carga sintética de CPU (todos os threads) e/ou testa a RAM (<see cref="MemTester"/>).</summary>
 public sealed class StressTester
 {
     private CancellationTokenSource? _cts;
     private readonly List<Thread> _threads = new();
-    private long _memErrors;
-    private long _memPasses;
+    private MemTester? _mem;
+    private long _ramRequested;
 
     public bool Running => _cts != null;
-    public long MemoryErrors => Interlocked.Read(ref _memErrors);
-    public long MemoryPasses => Interlocked.Read(ref _memPasses);
-    public long MemoryAllocatedBytes { get; private set; }
+
+    /// <summary>Teste de RAM da última execução (continua disponível depois de parar, para o resumo).</summary>
+    public MemTester? Memory => _mem;
+    public long MemoryErrors => _mem?.Errors ?? 0;
+    public long MemoryPasses => _mem?.Passes ?? 0;
+
+    /// <summary>Memória em teste (o pedido enquanto as threads alocam, depois o que foi conseguido). 0 = RAM desligada.</summary>
+    public long MemoryAllocatedBytes => _mem == null ? 0 : _mem.Ready ? _mem.AllocatedBytes : _ramRequested;
+
+    /// <summary>RAM física instalada que o Windows enxerga (para mostrar a cobertura do teste).</summary>
+    public static long InstalledMemoryBytes => GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
 
     /// <param name="cpu">Carga em todos os processadores lógicos.</param>
     /// <param name="ram">Aloca uma fração da RAM livre e grava/verifica padrões continuamente.</param>
@@ -23,13 +31,15 @@ public sealed class StressTester
         if (Running) return;
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
-        Interlocked.Exchange(ref _memErrors, 0);
-        Interlocked.Exchange(ref _memPasses, 0);
-        MemoryAllocatedBytes = 0;
+        _mem?.Dispose();
+        _mem = null;
+        _ramRequested = 0;
 
-        int cpuThreads = Environment.ProcessorCount;
-        // Com RAM ativa, reserva um thread para o worker de memória.
-        if (cpu && ram && cpuThreads > 1) cpuThreads--;
+        int logical = Environment.ProcessorCount;
+        // Só RAM: uma thread de teste por processador lógico (banda máxima, como o TestMem5).
+        // CPU + RAM: metade para cada, para a CPU esquentar e a memória continuar sob carga pesada.
+        int ramThreads = !ram ? 0 : cpu ? Math.Max(1, logical / 2) : logical;
+        int cpuThreads = cpu ? Math.Max(1, logical - ramThreads) : 0;
 
         if (cpu)
             for (int i = 0; i < cpuThreads; i++)
@@ -43,8 +53,10 @@ public sealed class StressTester
             long bytes = (long)(FreePhysicalMemory() * Math.Clamp(ramFraction, 0.1, 0.9));
             // Versão de 32 bits: o processo só enxerga ~2 GB de memória; passar disso derrubaria o programa.
             if (!Environment.Is64BitProcess) bytes = Math.Min(bytes, 1L << 30);
-            MemoryAllocatedBytes = bytes;
-            StartThread(() => RamWorker(token, bytes), "Stress RAM");
+            _ramRequested = bytes;
+            _mem = new MemTester();
+            // Prender cada thread a um núcleo só faz sentido quando a CPU está livre para o teste de RAM.
+            _mem.Start(bytes, ramThreads, pinThreads: !cpu);
         }
     }
 
@@ -52,6 +64,7 @@ public sealed class StressTester
     {
         if (_cts == null) return;
         _cts.Cancel();
+        _mem?.Stop(); // devolve a memória; contagens e erros continuam legíveis para o resumo
         foreach (var t in _threads) t.Join(2000);
         _threads.Clear();
         _cts.Dispose();
@@ -89,55 +102,6 @@ public sealed class StressTester
                 }
             }
             if (x == 0) buf[0] = 0; // evita que o JIT elimine o cálculo inteiro
-        }
-    }
-
-    private void RamWorker(CancellationToken token, long totalBytes)
-    {
-        const int chunkLongs = 16 * 1024 * 1024; // 128 MB por bloco
-        var chunks = new List<long[]>();
-        try
-        {
-            long allocated = 0;
-            try
-            {
-                while (allocated + chunkLongs * 8L <= totalBytes && !token.IsCancellationRequested)
-                {
-                    chunks.Add(new long[chunkLongs]);
-                    allocated += chunkLongs * 8L;
-                }
-            }
-            catch (OutOfMemoryException)
-            {
-                // Segue com o que conseguiu alocar.
-            }
-            MemoryAllocatedBytes = allocated;
-            if (chunks.Count == 0) return;
-
-            ulong pass = 0;
-            while (!token.IsCancellationRequested)
-            {
-                pass++;
-                long pattern = unchecked((long)(pass * 0x9E3779B97F4A7C15UL));
-                foreach (var c in chunks)
-                {
-                    for (int i = 0; i < c.Length; i++) c[i] = pattern ^ i;
-                    if (token.IsCancellationRequested) return;
-                }
-                foreach (var c in chunks)
-                {
-                    long errs = 0;
-                    for (int i = 0; i < c.Length; i++)
-                        if (c[i] != (pattern ^ i)) errs++;
-                    if (errs > 0) Interlocked.Add(ref _memErrors, errs);
-                    if (token.IsCancellationRequested) return;
-                }
-                Interlocked.Increment(ref _memPasses);
-            }
-        }
-        finally
-        {
-            chunks.Clear();
         }
     }
 

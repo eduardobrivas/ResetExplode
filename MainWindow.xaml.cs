@@ -1543,6 +1543,8 @@ public partial class MainWindow : Window
         _tempHistory.Clear();
         _gpuTempHistory.Clear();
 
+        _ramLoggedReady = false;
+        _ramLoggedPasses = 0;
         if (cpu || ram) _stress.Start(cpu, ram, fraction);
 
         string gpuDesc = "não";
@@ -1578,6 +1580,7 @@ public partial class MainWindow : Window
         var errors = _stress.MemoryErrors;
         var passes = _stress.MemoryPasses;
         bool hadRam = _stress.MemoryAllocatedBytes > 0;
+        if (hadRam && errors > 0) LogRamErrors();
         bool hadCpu = _stress.Running;
         _stress.Stop();
 
@@ -1683,13 +1686,14 @@ public partial class MainWindow : Window
             StRam.Text = _stress.MemoryAllocatedBytes > 0
                 ? $"{_stress.MemoryPasses} / {_stress.MemoryErrors}"
                 : "—";
+            UpdateRamTestStatus();
 
             if (_stress.Running && temp >= _tempLimit)
                 StopStress($"ABORTADO: CPU a {temp:0.#} °C atingiu o limite de {_tempLimit:0} °C");
             else if (_gpuBurnOn && gTemp >= _gpuTempLimit)
                 StopStress($"ABORTADO: GPU a {gTemp:0.#} °C atingiu o limite de {_gpuTempLimit:0} °C");
             else if (_stress.MemoryErrors > 0)
-                StopStress($"ABORTADO: {_stress.MemoryErrors} erros de memória detectados");
+                StopStress($"ABORTADO: {_stress.MemoryErrors} erros de memória detectados" + FirstRamErrorText());
             else if (_gpuBurnOn && !_burn.Running)
                 StopStress(_burn.Error != null ? $"ABORTADO: falha na GPU ({_burn.Error})"
                                                : "Janela da GPU fechada pelo usuário");
@@ -1707,6 +1711,60 @@ public partial class MainWindow : Window
         string gpus = _gpus.Count > 0 ? string.Join(" + ", _gpus.Select(g => g.Name)) : "—";
         string ram = total > 0 ? $"{total / 1073741824.0:0.#} GB" : "—";
         StressHw.Text = $"CPU: {(_cpuName.Length > 0 ? _cpuName : "—")}  ·  GPU: {gpus}  ·  RAM: {ram}";
+    }
+
+    // ---------------- teste de RAM (MemTester) ----------------
+
+    private bool _ramLoggedReady;
+    private long _ramLoggedPasses;
+
+    /// <summary>Linha de baixo do card de RAM (cobertura, padrão atual) e registro de início e de cada ciclo.</summary>
+    private void UpdateRamTestStatus()
+    {
+        var m = _stress.Memory;
+        if (m == null) { StRamSub.Text = "ciclos / erros"; return; }
+        if (!m.Ready) { StRamSub.Text = "ciclos / erros · alocando memória…"; return; }
+
+        long installed = StressTester.InstalledMemoryBytes;
+        double gb = m.AllocatedBytes / 1073741824.0;
+        string cover = installed > 0 ? $" ({100.0 * m.AllocatedBytes / installed:0}% da RAM)" : "";
+        StRamSub.Text = $"ciclos / erros · {gb:0.0} GB{cover} · {m.CurrentTest} {m.PassProgress * 100 % 100:0}%";
+
+        if (!_ramLoggedReady)
+        {
+            _ramLoggedReady = true;
+            string locked = m.LockedRegions == m.ThreadCount ? "sim"
+                          : m.LockedRegions == 0 ? "não (o Windows pode mandar parte para o disco; rode como administrador)"
+                          : $"parcial ({m.LockedRegions} de {m.ThreadCount} faixas)";
+            Log($"RAM: testando {gb:0.0} GB{cover} em {m.ThreadCount} threads · travada na RAM: {locked} · " +
+                $"{MemTester.Tests.Length} padrões por ciclo");
+        }
+        if (m.Passes > _ramLoggedPasses)
+        {
+            _ramLoggedPasses = m.Passes;
+            Log($"RAM: ciclo {m.Passes} completo, {m.Errors} erros · {m.ThroughputGBs:0.0} GB/s");
+        }
+    }
+
+    private string FirstRamErrorText()
+    {
+        var e = _stress.Memory?.FirstErrors.FirstOrDefault();
+        return e == null ? "" : $" (primeiro no padrão \"{e.Test}\", {e.BitsFlipped} bit(s) trocado(s))";
+    }
+
+    /// <summary>Erros por padrão e o que cada um costuma indicar: ajuda a decidir o que mexer (timings, tensão, frequência).</summary>
+    private void LogRamErrors()
+    {
+        var m = _stress.Memory;
+        if (m == null) return;
+        for (int i = 0; i < MemTester.Tests.Length; i++)
+            if (m.ErrorsInTest(i) is long n and > 0)
+                Log($"RAM: {n} erros em \"{MemTester.Tests[i].Name}\" (costuma indicar: {MemTester.Tests[i].Detects})");
+        foreach (var e in m.FirstErrors.Take(5))
+            Log($"RAM: thread {e.Thread}, posição +0x{e.OffsetBytes:X}: esperado {e.Expected:X16}, lido {e.Actual:X16} " +
+                $"({e.BitsFlipped} bit(s))");
+        Log("RAM: erro de memória com tudo no padrão (sem XMP/OC) indica defeito no pente; com XMP/timings manuais, " +
+            "afrouxe timings, suba a tensão da DRAM com cuidado ou reduza a frequência.");
     }
 
     private void Log(string msg)

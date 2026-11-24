@@ -1,3 +1,17 @@
+## Fork · Etapa 2: novo teste de RAM
+
+- **Teste de estabilidade de verdade** (estilo TestMem5/MemTest86) no lugar do antigo, que usava 1 thread e 1 padrão:
+  uma thread por processador lógico, cada uma com a sua faixa de memória.
+- **Memória travada na RAM** (VirtualLock): o Windows não manda a área em teste para o disco, então é a RAM que é testada,
+  e não o SSD. O registro avisa se não conseguiu travar.
+- **6 padrões por ciclo**, cada um pega um tipo de defeito: endereço próprio, inversões 0/1, inversões 55/AA,
+  walking 1/0, aleatório e cópia em bloco (banda máxima). Os padrões fixos são escritos sem passar pelo cache (AVX).
+- **Mais memória testada:** nova opção de 90% da RAM livre.
+- **Painel:** mostra GB testados, % da RAM instalada, padrão atual e progresso do ciclo.
+- **Quando acha erro:** o registro diz em que padrão foi, quantos bits trocaram, o endereço, e o que costuma resolver.
+- **CPU + RAM juntos:** metade das threads para cada (antes a RAM ficava com uma thread só).
+- **Testes:** `Tests/MemTests` injeta defeitos (bit trocado, bit preso em 0/1, endereço duplicado) e confere que são pegos.
+
 ## Fork · Etapa 1: novo motor de coleta de sensores
 
 - **Coleta em segundo plano:** os sensores são lidos numa thread própria. A janela só copia o último resultado pronto
