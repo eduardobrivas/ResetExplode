@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Testes do motor de sensores sem hardware real e sem pacotes NuGet: as interfaces do LibreHardwareMonitor
+    são substituídas por versões mínimas (LhmStubs.cs) com as mesmas assinaturas usadas pelo motor.
+    Rodar: dotnet run -c Release (pasta Tests/SensorTests), com o caminho de um log CSV do HWiNFO como argumento opcional
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\SensorSchedule.cs" Link="Engine\SensorSchedule.cs" />
+    <Compile Include="..\..\SensorHub.cs" Link="Engine\SensorHub.cs" />
+    <Compile Include="..\..\SensorTable.cs" Link="Engine\SensorTable.cs" />
+    <Compile Include="..\..\SensorRow.cs" Link="Engine\SensorRow.cs" />
+  </ItemGroup>
+
+</Project>

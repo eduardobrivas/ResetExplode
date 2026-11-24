@@ -31,7 +31,7 @@ public partial class MainWindow
     // ---------------- coleta (a cada segundo, mesmo com a página fechada) ----------------
 
     private float? MainGpuLoad() => _gpus.Count == 0 ? null :
-        _monitor.Rows.FirstOrDefault(r => r.Hardware == _gpus[0].Name && r.Type == SensorType.Load && r.Name == "GPU Core")?.RawValue;
+        _monitor.Find(_gpus[0].Name, SensorType.Load, "GPU Core")?.RawValue;
 
     /// <summary>
     /// Clock da CPU para exibição: média só dos núcleos que estão trabalhando (carga ≥ 10%), como o Gerenciador de Tarefas.

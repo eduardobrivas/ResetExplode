@@ -27,12 +27,28 @@ public class SensorRow : INotifyPropertyChanged
     public string Min => Format(_min);
     public string Max => Format(_max);
 
-    public void Update(float? value, float? min, float? max)
+    private static readonly PropertyChangedEventArgs ValueArgs = new(nameof(Value)), MinArgs = new(nameof(Min)), MaxArgs = new(nameof(Max));
+
+    /// <summary>
+    /// Guarda os valores novos. Só avisa a tela (<paramref name="notify"/>) do que mudou de fato:
+    /// antes eram 3 avisos por sensor por segundo, mesmo com a página fechada e o valor igual.
+    /// </summary>
+    public void Update(float? value, float? min, float? max, bool notify = true)
     {
+        bool v = value != _value, lo = min != _min, hi = max != _max;
         _value = value; _min = min; _max = max;
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Value)));
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Min)));
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Max)));
+        if (!notify || PropertyChanged == null) return;
+        if (v) PropertyChanged(this, ValueArgs);
+        if (lo) PropertyChanged(this, MinArgs);
+        if (hi) PropertyChanged(this, MaxArgs);
+    }
+
+    /// <summary>Redesenha os três valores (quando a página volta a ficar visível).</summary>
+    public void NotifyAll()
+    {
+        PropertyChanged?.Invoke(this, ValueArgs);
+        PropertyChanged?.Invoke(this, MinArgs);
+        PropertyChanged?.Invoke(this, MaxArgs);
     }
 
     private string Format(float? v)

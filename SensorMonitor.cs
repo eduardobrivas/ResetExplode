@@ -3,14 +3,21 @@ using LibreHardwareMonitor.Hardware;
 
 namespace ResetExplode;
 
-/// <summary>Encapsula o LibreHardwareMonitorLib e mantém a lista de sensores atualizada.</summary>
+/// <summary>
+/// Encapsula o LibreHardwareMonitorLib. A leitura do hardware roda numa thread própria (<see cref="SensorHub"/>);
+/// <see cref="Refresh"/>, chamado pela janela, só copia o último resultado pronto para as linhas da tela.
+/// </summary>
 public sealed class SensorMonitor : IDisposable
 {
     private readonly Computer _computer;
-    private readonly Dictionary<string, SensorRow> _index = new();
+    private readonly SensorTable _table = new();
+    private SensorHub? _hub;
     private volatile bool _open;
+    // Preferências guardadas até o hub existir (a detecção do hardware leva alguns segundos).
+    private bool _suspended, _detail;
+    private SensorMode _mode = SensorMode.Normal;
 
-    public ObservableCollection<SensorRow> Rows { get; } = new();
+    public ObservableCollection<SensorRow> Rows => _table.Rows;
     public bool IsOpen => _open;
 
     public SensorMonitor()
@@ -27,64 +34,68 @@ public sealed class SensorMonitor : IDisposable
         };
     }
 
-    /// <summary>Detecta o hardware (leva de 0,5 a alguns segundos) fora da thread da janela. Até terminar, Refresh não faz nada.</summary>
-    public Task OpenAsync() => Task.Run(() => { _computer.Open(); _open = true; });
+    /// <summary>
+    /// Detecta o hardware (leva de 0,5 a alguns segundos) e liga a thread de leitura. Até terminar, Refresh não faz nada.
+    /// Retorna quando a primeira leitura completa está pronta, para a tela já abrir com valores.
+    /// </summary>
+    public async Task OpenAsync()
+    {
+        await Task.Run(() => _computer.Open());
+        var hub = new SensorHub(_computer.Hardware.ToList()) { Suspended = _suspended, Mode = _mode, DetailWanted = _detail };
+        hub.Start();
+        _hub = hub;
+        for (int i = 0; i < 40 && hub.Latest == null; i++) await Task.Delay(50); // primeira volta (até 2 s)
+        _open = true;
+    }
 
+    /// <summary>Aplica o último resultado da thread de sensores (barato: nada de driver aqui).</summary>
     public void Refresh()
     {
-        if (!_open) return;
-        foreach (var hw in _computer.Hardware)
-            Walk(hw);
+        if (_open) _table.Apply(_hub?.Latest);
     }
 
-    private void Walk(IHardware hw)
+    /// <summary>Pausa total da leitura (benchmarks de GPU e de disco).</summary>
+    public bool Suspended
     {
-        hw.Update();
-        foreach (var s in hw.Sensors)
-        {
-            string id = s.Identifier.ToString();
-            if (!_index.TryGetValue(id, out var row))
-            {
-                row = new SensorRow
-                {
-                    Id = id,
-                    Hardware = hw.Name,
-                    Category = SensorRow.CategoryName(s.SensorType),
-                    Name = s.Name,
-                    Type = s.SensorType,
-                    HardwareType = hw.HardwareType
-                };
-                _index[id] = row;
-                Rows.Add(row);
-            }
-            row.Update(s.Value, s.Min, s.Max);
-        }
-        foreach (var sub in hw.SubHardware)
-            Walk(sub);
+        get => _suspended;
+        set { _suspended = value; if (_hub != null) _hub.Suspended = value; }
     }
+
+    /// <summary>Economy: janela minimizada sem overlay, testes ou iluminação. Lê 5x menos.</summary>
+    public SensorMode Mode
+    {
+        get => _mode;
+        set { _mode = value; if (_hub != null) _hub.Mode = value; }
+    }
+
+    /// <summary>Página com a lista de sensores (ou discos) aberta: ventoinhas, tensões e discos atualizam mais rápido.</summary>
+    public bool DetailWanted
+    {
+        get => _detail;
+        set { _detail = value; if (_hub != null) _hub.DetailWanted = value; }
+    }
+
+    /// <summary>Alguma página mostra as linhas de sensores? Se não, os valores andam sem redesenhar a tela.</summary>
+    public bool NotifyUi
+    {
+        get => _table.NotifyUi;
+        set => _table.NotifyUi = value;
+    }
+
+    /// <summary>Custo da coleta no último resultado (para a barra de status).</summary>
+    public SensorHubStats? Stats => _hub?.Latest?.Stats;
+
+    /// <summary>Busca em cache por hardware + tipo + nome exato.</summary>
+    public SensorRow? Find(string hardware, SensorType type, string name) => _table.Find(hardware, type, name);
 
     /// <summary>Temperatura principal da CPU: Package (Intel) / Tctl-Tdie (AMD), senão a maior entre os núcleos.</summary>
-    public float? CpuTemperature
-    {
-        get
-        {
-            var temps = Rows.Where(r => r.HardwareType == HardwareType.Cpu
-                                     && r.Type == SensorType.Temperature
-                                     && r.RawValue is > 0).ToList();
-            var main = temps.FirstOrDefault(r => r.Name.Contains("Package") || r.Name.Contains("Tctl") || r.Name.Contains("Tdie"));
-            return main?.RawValue ?? temps.Max(r => r.RawValue);
-        }
-    }
+    public float? CpuTemperature => _table.CpuTemperature;
 
     /// <summary>Carga total da CPU em %.</summary>
-    public float? CpuLoad => Rows.FirstOrDefault(r => r.HardwareType == HardwareType.Cpu
-                                                   && r.Type == SensorType.Load
-                                                   && r.Name == "CPU Total")?.RawValue;
+    public float? CpuLoad => _table.CpuLoad;
 
     /// <summary>Consumo do pacote da CPU em W.</summary>
-    public float? CpuPower => Rows.FirstOrDefault(r => r.HardwareType == HardwareType.Cpu
-                                                    && r.Type == SensorType.Power
-                                                    && r.Name.Contains("Package"))?.RawValue;
+    public float? CpuPower => _table.CpuPower;
 
     /// <summary>
     /// Driver PawnIO (necessário para temperatura/consumo da CPU via MSR/SMN).
@@ -132,6 +143,7 @@ public sealed class SensorMonitor : IDisposable
 
     public void Dispose()
     {
+        _hub?.Dispose(); // primeiro para a thread de leitura, depois solta o hardware
         if (_open) _computer.Close();
     }
 }

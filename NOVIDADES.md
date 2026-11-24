@@ -1,3 +1,16 @@
+## Fork · Etapa 1: novo motor de coleta de sensores
+
+- **Coleta em segundo plano:** os sensores são lidos numa thread própria. A janela só copia o último resultado pronto
+  e nunca mais espera o driver (antes, a leitura do S.M.A.R.T. dos discos travava a interface a cada segundo).
+- **Cada hardware no seu ritmo:** CPU, GPU e memória a cada 1 s; placa-mãe, ventoinhas e rede a cada 2 s;
+  discos a cada 15 s. Com a lista de sensores aberta, ventoinhas a 1 s e discos a 3 s.
+- **Modo economia:** com a janela minimizada e sem overlay, stress ou iluminação ligados, a coleta lê 5x menos.
+- **Benchmarks:** a pausa de sensores durante os testes de GPU e de disco agora vale também para a thread de leitura.
+- **Tela:** cada sensor só avisa a interface quando o valor muda, e nada é redesenhado com a página fechada.
+- **Overlay:** pega a leitura mais nova a cada 0,5 s (antes podia mostrar valores de até 1 s atrás).
+- **Barra de status:** mostra quanto a coleta custa ("coleta X ms/s") e se alguma leitura falhou.
+- **Testes:** `Tests/SensorTests` testa o motor sem hardware (dispositivos simulados e replay de log CSV do HWiNFO).
+
 ## Novidades da v0.17
 
 **Correções e melhorias pedidas pela comunidade**

@@ -106,9 +106,10 @@ public partial class MainWindow : Window
         {
             // Durante a cena de GPU as leituras de sensores (NVML/driver) ficam pausadas: cada consulta trava o driver
             // por um instante e aparecia como engasgo no 1% low do benchmark.
+            UpdateSensorDemand();
             if (_gpuBenchActive) return;
             _monitor.Refresh();
-            if (_monitor.IsOpen) StatusText.Text = $"{_monitor.Rows.Count} sensores · atualizado {DateTime.Now:HH:mm:ss}";
+            if (_monitor.IsOpen) StatusText.Text = SensorStatusText();
             UpdateStressPanel();
             UpdateGpuLive();
             UpdateCpuSensorWarning();
@@ -442,8 +443,7 @@ public partial class MainWindow : Window
         // Barra lateral: GPU principal (dedicada = primeira da lista).
         if (_gpus.Count > 0)
         {
-            var load = _monitor.Rows.FirstOrDefault(r => r.Hardware == _gpus[0].Name && r.Type == SensorType.Load
-                                                         && r.Name == "GPU Core");
+            var load = _monitor.Find(_gpus[0].Name, SensorType.Load, "GPU Core");
             SideGpuTemp.Text = MainGpuTemp() is float t ? $"{t:0.#} °C" : "—";
             SideGpuLoad.Text = load?.RawValue is float l ? $"{l:0} %" : "—";
         }
@@ -1033,7 +1033,16 @@ public partial class MainWindow : Window
     public sealed record MemRow(string Label, string Value, string Hint);
     private bool _gameBenchRunning;
     private GpuGameBench? _gpuBench;
-    private bool _gpuBenchActive;
+    private bool _benchFlag;
+    /// <summary>
+    /// Benchmark de GPU ou de disco rodando: a leitura de sensores fica pausada (cada consulta ao driver
+    /// aparecia como engasgo no 1% low). Antes só o timer da janela parava; agora a thread de sensores também.
+    /// </summary>
+    private bool _gpuBenchActive
+    {
+        get => _benchFlag;
+        set { _benchFlag = value; _monitor.Suspended = value; }
+    }
     private CancellationTokenSource? _gameBenchCts;
     private System.Windows.Media.Imaging.WriteableBitmap? _simBitmap;
     private int[] _simPixels = Array.Empty<int>();
@@ -1372,6 +1381,9 @@ public partial class MainWindow : Window
 
     private void UpdateOverlay()
     {
+        // Pega a leitura mais nova da thread de sensores (custa só uma cópia): o overlay roda a cada 0,5 s
+        // e antes mostrava valores de até 1 s atrás, do último tick da janela.
+        if (!_gpuBenchActive) _monitor.Refresh();
         var f = _frames.GetForegroundStats();
         if (_overlay != null && _overlay.IsVisible)
         {
@@ -1395,6 +1407,33 @@ public partial class MainWindow : Window
     private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
     // ---------------- Sensores ----------------
+
+    /// <summary>
+    /// Diz à coleta o que a tela precisa agora (roda a cada segundo, é barato):
+    /// economia quando minimizado sem nada que dependa dos sensores; ritmo completo quando a lista está aberta.
+    /// </summary>
+    private void UpdateSensorDemand()
+    {
+        bool minimized = WindowState == WindowState.Minimized;
+        bool backgroundUse = ChkOverlay.IsChecked == true || _stress.Running || _burn.Running || _lightTimer?.IsEnabled == true;
+        _monitor.Mode = minimized && !backgroundUse ? SensorMode.Economy : SensorMode.Normal;
+
+        bool listOpen = !minimized && (PageSensors.IsVisible || PageGpu.IsVisible);
+        _monitor.DetailWanted = listOpen || (!minimized && PageDisks.IsVisible);
+        _monitor.NotifyUi = listOpen;
+    }
+
+    private string SensorStatusText()
+    {
+        string s = $"{_monitor.Rows.Count} sensores · atualizado {DateTime.Now:HH:mm:ss}";
+        if (_monitor.Stats is { } st)
+        {
+            s += $" · coleta {st.CostMsPerSecond:0.#} ms/s";
+            if (_monitor.Mode == SensorMode.Economy) s += " (economia)";
+            if (st.Failures > 0) s += $" · {st.Failures} leituras falharam";
+        }
+        return s;
+    }
 
     private void AddChip(string label, string? category, bool isChecked = false)
     {

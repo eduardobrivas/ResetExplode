@@ -35,7 +35,7 @@ public static class BottleneckAnalyzer
         bool thermal = false;
         if (gpu != null)
         {
-            gpuLoad = rows.FirstOrDefault(r => r.Hardware == gpu.Name && r.Type == SensorType.Load && r.Name == "GPU Core")?.RawValue;
+            gpuLoad = m.Find(gpu.Name, SensorType.Load, "GPU Core")?.RawValue;
             var temps = rows.Where(r => r.Hardware == gpu.Name && r.Type == SensorType.Temperature).ToList();
             gpuTemp = (temps.FirstOrDefault(r => r.Name == "GPU Core") ?? temps.FirstOrDefault())?.RawValue;
 

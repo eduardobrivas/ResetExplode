@@ -16,6 +16,12 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
+  <!-- Testes do motor de sensores: projeto separado (roda em qualquer SO), fora do build do app -->
+  <ItemGroup>
+    <Compile Remove="Tests\**" />
+    <None Remove="Tests\**" />
+  </ItemGroup>
+
   <ItemGroup>
     <Resource Include="Assets\logo.png" />
     <Resource Include="Assets\app.ico" />

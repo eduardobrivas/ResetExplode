@@ -57,9 +57,12 @@ public partial class MainWindow
 
     // ------------------------------------------------------------------ leitura dos sensores
 
-    private SensorRow? GpuRow(SensorType type, string name, bool startsWith = false) =>
-        _gpus.Count == 0 ? null : _monitor.Rows.FirstOrDefault(r => r.Hardware == _gpus[0].Name && r.Type == type &&
-                                                                   (startsWith ? r.Name.StartsWith(name) : r.Name == name) && r.RawValue != null);
+    private SensorRow? GpuRow(SensorType type, string name, bool startsWith = false)
+    {
+        if (_gpus.Count == 0) return null;
+        if (!startsWith) return _monitor.Find(_gpus[0].Name, type, name) is { RawValue: not null } r ? r : null; // em cache
+        return _monitor.Rows.FirstOrDefault(r => r.Hardware == _gpus[0].Name && r.Type == type && r.Name.StartsWith(name) && r.RawValue != null);
+    }
 
     private uint? MainGpuClock(int nvmlType, string lhmName)
     {
