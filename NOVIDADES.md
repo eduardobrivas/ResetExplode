@@ -1,3 +1,13 @@
+## Fork · Cores e relatório do stress test
+
+- **Cores com significado:** temperaturas da CPU e da GPU ficam amarelas a 10 °C do limite e vermelhas a 3 °C;
+  o card da RAM fica verde com ciclo completo sem erro e vermelho com erro; no registro, falhas em vermelho,
+  avisos em amarelo e ciclos/conclusão em verde. Funciona nos temas escuro e claro.
+- **Exportar CSV:** uma linha por segundo (temperaturas, carga, consumo, FPS da GPU, ciclos e erros da RAM),
+  no formato do Excel em português (";" e vírgula decimal).
+- **Exportar PDF:** relatório com veredito, máquina, configuração, resultados, gráfico de temperatura,
+  teste de RAM por padrão (com os primeiros erros) e o registro completo. Gerado sem bibliotecas externas.
+
 ## Fork · Etapa 2: novo teste de RAM
 
 - **Teste de estabilidade de verdade** (estilo TestMem5/MemTest86) no lugar do antigo, que usava 1 thread e 1 padrão:

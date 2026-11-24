@@ -14,6 +14,7 @@
     </WindowChrome.WindowChrome>
 
     <Window.Resources>
+        <local:LogLineBrushConverter x:Key="LogLineBrush"/>
         <!-- Linha da tela "Sistema": folha = chave/valor; grupo = título + filhos (recursivo) -->
         <DataTemplate DataType="{x:Type local:InfoNode}">
             <StackPanel>
@@ -2915,11 +2916,27 @@
                     <!-- Log -->
                     <Border Grid.Row="5" Style="{StaticResource CardBorder}" Padding="18,14,10,10">
                         <DockPanel>
-                            <TextBlock DockPanel.Dock="Top" Text="REGISTRO" Style="{StaticResource Label}"/>
+                            <DockPanel DockPanel.Dock="Top" LastChildFill="False">
+                                <TextBlock DockPanel.Dock="Left" Text="REGISTRO" Style="{StaticResource Label}" VerticalAlignment="Center"/>
+                                <!-- Exporta a sessão atual ou a última: CSV com uma amostra por segundo, PDF com o relatório -->
+                                <Button x:Name="BtnStressPdf" DockPanel.Dock="Right" Style="{StaticResource OutlineButton}" Content="EXPORTAR PDF"
+                                        Padding="12,5" Margin="8,0,8,6" IsEnabled="False" Click="StressPdf_Click"
+                                        ToolTip="Relatório com configuração, resultado, temperaturas, teste de RAM e registro"/>
+                                <Button x:Name="BtnStressCsv" DockPanel.Dock="Right" Style="{StaticResource OutlineButton}" Content="EXPORTAR CSV"
+                                        Padding="12,5" Margin="0,0,0,6" IsEnabled="False" Click="StressCsv_Click"
+                                        ToolTip="Uma linha por segundo: temperaturas, carga, consumo e teste de RAM (abre no Excel)"/>
+                            </DockPanel>
                             <TextBlock x:Name="StressHw" DockPanel.Dock="Top" Foreground="{DynamicResource Muted}" FontSize="12"
                                        TextWrapping="Wrap" Margin="0,0,0,8"/>
                             <ListBox x:Name="StressLog" FontFamily="{StaticResource Mono}" FontSize="12"
-                                     Foreground="{DynamicResource Muted}" ItemContainerStyle="{StaticResource PlainItem}"/>
+                                     Foreground="{DynamicResource Muted}" ItemContainerStyle="{StaticResource PlainItem}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <!-- Vermelho = falha, amarelo = aviso, verde = concluído/ciclo sem erro -->
+                                        <TextBlock Text="{Binding}" TextWrapping="Wrap" Foreground="{Binding Converter={StaticResource LogLineBrush}}"/>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
                         </DockPanel>
                     </Border>
                 </Grid>

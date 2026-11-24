@@ -15,6 +15,10 @@
     <SolidColorBrush x:Key="ThumbBrush" Color="#2E2E2E"/>
     <SolidColorBrush x:Key="ThumbHover" Color="#6A6A6A"/>
     <SolidColorBrush x:Key="ThumbDrag" Color="#9A9A9A"/>
+    <!-- Estado: normal / atenção / problema (ThemeManager troca no tema claro) -->
+    <SolidColorBrush x:Key="Good" Color="#3DDC84"/>
+    <SolidColorBrush x:Key="Warn" Color="#FFB020"/>
+    <SolidColorBrush x:Key="Bad" Color="#FF5A5F"/>
 
     <FontFamily x:Key="Mono">Cascadia Mono, Consolas</FontFamily>
     <FontFamily x:Key="Icons">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>

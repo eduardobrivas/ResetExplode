@@ -26,6 +26,11 @@ public static class ThemeManager
         ("ThumbBrush", "#2E2E2E", "#CFCFCF"),
         ("ThumbHover", "#6A6A6A", "#A5A5A5"),
         ("ThumbDrag", "#9A9A9A", "#7A7A7A"),
+        // Cores com significado (só onde o valor pede atenção): dentro do normal, perto do limite, passou do limite.
+        // Escolhidas para contraste ≥ 4,5:1 no fundo de cada tema.
+        ("Good", "#3DDC84", "#1B7F3B"),
+        ("Warn", "#FFB020", "#9A5B00"),
+        ("Bad", "#FF5A5F", "#C4232B"),
         (SystemColors.ControlBrushKey, "#000000", "#FFFFFF"),
         (SystemColors.HighlightBrushKey, "#181818", "#E4E4E4"),
         (SystemColors.InactiveSelectionHighlightBrushKey, "#181818", "#E4E4E4"),

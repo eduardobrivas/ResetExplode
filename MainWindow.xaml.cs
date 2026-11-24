@@ -444,7 +444,9 @@ public partial class MainWindow : Window
         if (_gpus.Count > 0)
         {
             var load = _monitor.Find(_gpus[0].Name, SensorType.Load, "GPU Core");
-            SideGpuTemp.Text = MainGpuTemp() is float t ? $"{t:0.#} °C" : "—";
+            float? gt = MainGpuTemp();
+            SideGpuTemp.Text = gt is float t ? $"{t:0.#} °C" : "—";
+            StatusColors.Apply(SideGpuTemp, StatusColors.Temperature(gt, _gpuTempLimit));
             SideGpuLoad.Text = load?.RawValue is float l ? $"{l:0} %" : "—";
         }
         if (_gpu != null && PageGpu.IsVisible) GpuExtras.ItemsSource = _gpu.LiveExtras();
@@ -1545,6 +1547,17 @@ public partial class MainWindow : Window
 
         _ramLoggedReady = false;
         _ramLoggedPasses = 0;
+        _report = new StressReport
+        {
+            Start = _stressStart, Cpu = cpu, Ram = ram, Gpu = gpu, CpuLimit = _tempLimit, GpuLimit = _gpuTempLimit,
+            RamFraction = fraction, DurationMinutes = minutes,
+            CpuName = _monitor.Rows.FirstOrDefault(r => r.HardwareType == HardwareType.Cpu)?.Hardware ?? "",
+            GpuName = _gpus.Count > 0 ? _gpus[0].Name : "",
+            InstalledRamGB = StressTester.InstalledMemoryBytes / 1073741824.0,
+            Os = System.Runtime.InteropServices.RuntimeInformation.OSDescription,
+            AppVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "",
+        };
+        BtnStressCsv.IsEnabled = BtnStressPdf.IsEnabled = true;
         if (cpu || ram) _stress.Start(cpu, ram, fraction);
 
         string gpuDesc = "não";
@@ -1566,6 +1579,7 @@ public partial class MainWindow : Window
                       $"{GpuIntensityPanel.Children.OfType<RadioButton>().First(r => r.IsChecked == true).Content}, limite {_gpuTempLimit:0} °C)";
         }
 
+        if (_report != null) _report.GpuSettings = gpuDesc;
         SetStressControls(running: true);
         SetStatus("Rodando", alert: false);
         UpdateStressHardware();
@@ -1581,6 +1595,10 @@ public partial class MainWindow : Window
         var passes = _stress.MemoryPasses;
         bool hadRam = _stress.MemoryAllocatedBytes > 0;
         if (hadRam && errors > 0) LogRamErrors();
+        if (_report != null && hadRam && _stress.Memory is { } mem)
+            _report.RamResult = new RamResult(mem.AllocatedBytes / 1073741824.0, StressTester.InstalledMemoryBytes / 1073741824.0,
+                mem.ThreadCount, mem.LockedRegions, mem.Passes, mem.Errors, mem.ThroughputGBs,
+                MemTester.Tests.Select((t, i) => (t.Name, t.Detects, mem.ErrorsInTest(i))).ToList(), mem.FirstErrors.ToList());
         bool hadCpu = _stress.Running;
         _stress.Stop();
 
@@ -1599,6 +1617,13 @@ public partial class MainWindow : Window
         Log($"{reason} · duração {DateTime.Now - _stressStart:hh\\:mm\\:ss}" +
             (hadCpu ? $" · CPU temp. máx. {_stressMaxTemp:0.#} °C" : "") +
             (hadRam ? $" · RAM {passes} passes, {errors} erros" : "") + gpuSummary);
+        if (_report != null)
+        {
+            _report.CpuMaxTemp = (float)_stressMaxTemp;
+            _report.GpuMaxTemp = (float)_gpuMaxTemp;
+            if (_report.Gpu) { _report.GpuFrames = _burn.Frames; _report.GpuAvgFps = _burn.AverageFps; }
+            _report.Finish(reason);
+        }
     }
 
     private void SetStressControls(bool running)
@@ -1666,6 +1691,11 @@ public partial class MainWindow : Window
         }
 
         StTemp.Text = SideTemp.Text = temp == null ? "—" : $"{temp:0.#} °C";
+        // Cor pelo limite configurado no stress (padrão 90 °C CPU / 85 °C GPU): amarelo a 10 °C, vermelho a 3 °C do corte.
+        var cpuLevel = StatusColors.Temperature(temp, _tempLimit);
+        StatusColors.Apply(StTemp, cpuLevel);
+        StatusColors.Apply(SideTemp, cpuLevel);
+        StatusColors.Apply(StGpuTemp, StatusColors.Temperature(gTemp, _gpuTempLimit));
         StTempMax.Text = _stressMaxTemp > 0 ? $"máx. {_stressMaxTemp:0.#} °C" : "máx. —";
         SideLoad.Text = load == null ? "—" : $"{load:0} %";
         StLoad.Text = load == null ? "carga —" : $"carga {load:0} %";
@@ -1681,11 +1711,15 @@ public partial class MainWindow : Window
 
         if (TestRunning)
         {
+            _report?.Add(new StressSample(DateTime.Now, temp, load, power, gTemp, gPower,
+                                          _gpuBurnOn && _burn.Fps > 0 ? _burn.Fps : null, _stress.MemoryPasses, _stress.MemoryErrors));
             var elapsed = DateTime.Now - _stressStart;
             StElapsed.Text = elapsed.ToString(@"hh\:mm\:ss");
             StRam.Text = _stress.MemoryAllocatedBytes > 0
                 ? $"{_stress.MemoryPasses} / {_stress.MemoryErrors}"
                 : "—";
+            StatusColors.Apply(StRam, _stress.MemoryAllocatedBytes > 0
+                ? StatusColors.Ram(_stress.MemoryPasses, _stress.MemoryErrors) : StatusLevel.Normal);
             UpdateRamTestStatus();
 
             if (_stress.Running && temp >= _tempLimit)
@@ -1767,8 +1801,44 @@ public partial class MainWindow : Window
             "afrouxe timings, suba a tensão da DRAM com cuidado ou reduza a frequência.");
     }
 
+    // ---------------- relatório e exportação ----------------
+
+    /// <summary>Sessão atual ou a última (exportável enquanto roda ou depois de parar).</summary>
+    private StressReport? _report;
+
+    private string? AskSavePath(string ext, string filter)
+    {
+        var dlg = new Microsoft.Win32.SaveFileDialog
+        {
+            FileName = $"ResetExplode_stress_{_report!.Start:yyyy-MM-dd_HHmm}.{ext}",
+            Filter = filter,
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+        };
+        return dlg.ShowDialog(this) == true ? dlg.FileName : null;
+    }
+
+    private void StressCsv_Click(object sender, RoutedEventArgs e)
+    {
+        if (_report == null || AskSavePath("csv", "Planilha CSV (*.csv)|*.csv") is not string path) return;
+        try { _report.SaveCsv(path); Log($"Exportado: {path}"); }
+        catch (Exception ex) { MessageBox.Show($"Não foi possível salvar o CSV: {ex.Message}", "RESET EXPLODE"); }
+    }
+
+    private void StressPdf_Click(object sender, RoutedEventArgs e)
+    {
+        if (_report == null || AskSavePath("pdf", "Relatório PDF (*.pdf)|*.pdf") is not string path) return;
+        try
+        {
+            _report.SavePdf(path);
+            Log($"Exportado: {path}");
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }); // abre no leitor padrão
+        }
+        catch (Exception ex) { MessageBox.Show($"Não foi possível salvar o PDF: {ex.Message}", "RESET EXPLODE"); }
+    }
+
     private void Log(string msg)
     {
+        if (_report?.End == null && !msg.StartsWith("Exportado:")) _report?.AddLog(DateTime.Now, msg);
         StressLog.Items.Add($"{DateTime.Now:HH:mm:ss}  {msg}");
         StressLog.ScrollIntoView(StressLog.Items[^1]);
     }

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Gera relatórios de exemplo (PDF e CSV) do stress test sem a janela: confere o gerador de PDF próprio e o CSV.
+    Rodar: dotnet run -c Release (pasta Tests/ReportTests), com a pasta de saída como argumento opcional
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\SimplePdf.cs" Link="Engine\SimplePdf.cs" />
+    <Compile Include="..\..\StressReport.cs" Link="Engine\StressReport.cs" />
+    <Compile Include="..\..\StatusLevel.cs" Link="Engine\StatusLevel.cs" />
+    <Compile Include="..\..\MemTester.cs" Link="Engine\MemTester.cs" />
+  </ItemGroup>
+
+</Project>
