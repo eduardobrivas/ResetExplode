@@ -30,6 +30,12 @@ public sealed class FrameMonitor : IDisposable
     public bool Running => _thread?.IsAlive == true;
     public string? Error { get; private set; }
 
+    /// <summary>
+    /// Cada frame de qualquer processo (pid, instante em ms no relógio do ETW), para a gravação de sessão.
+    /// Disparado na thread do ETW: quem assina precisa ser rápido e seguro entre threads.
+    /// </summary>
+    public event Action<int, double>? FramePresented;
+
     public void Start()
     {
         if (Running) return;
@@ -71,6 +77,7 @@ public sealed class FrameMonitor : IDisposable
             while (q.Count > 0 && q.Peek() < t - HistoryMs) q.Dequeue();
             _lastSeen[e.ProcessID] = Stopwatch.GetTimestamp();
         }
+        FramePresented?.Invoke(e.ProcessID, t);
     }
 
     /// <summary>Estatísticas do processo, ou null se ele não apresentou frames nos últimos 2 s.</summary>

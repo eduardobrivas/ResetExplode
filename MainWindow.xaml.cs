@@ -110,6 +110,7 @@ public partial class MainWindow : Window
             if (_gpuBenchActive) return;
             _monitor.Refresh();
             if (_monitor.IsOpen) StatusText.Text = SensorStatusText();
+            RecordGameSample();
             UpdateStressPanel();
             UpdateGpuLive();
             UpdateCpuSensorWarning();
@@ -132,8 +133,10 @@ public partial class MainWindow : Window
             _stress.Stop(); _burn.Stop(); _benchCts?.Cancel();
             _overlay?.Close();
             _toast?.Close();
+            SaveGameOnClose();
             _frames.Dispose();
             UnregisterHotKey(new System.Windows.Interop.WindowInteropHelper(this).Handle, HotkeyId);
+            UnregisterHotKey(new System.Windows.Interop.WindowInteropHelper(this).Handle, RecHotkeyId);
             ShutdownInteg();
             _launchCts?.Cancel();
             _monitor.Dispose();
@@ -1295,6 +1298,7 @@ public partial class MainWindow : Window
         System.Windows.Interop.HwndSource.FromHwnd(hwnd)?.AddHook(MaximizeHook);
         // Ctrl + Shift + O, sem repetição ao segurar
         RegisterHotKey(hwnd, HotkeyId, 0x0002 | 0x0004 | 0x4000, 0x4F);
+        RegisterRecHotkey(hwnd);
     }
 
     // ---- Maximizar sem cobrir a barra de tarefas (em qualquer lado da tela e em qualquer monitor) ----
@@ -1338,6 +1342,11 @@ public partial class MainWindow : Window
         if (msg == 0x0312 && wParam.ToInt32() == HotkeyId) // WM_HOTKEY
         {
             ChkOverlay.IsChecked = ChkOverlay.IsChecked != true;
+            handled = true;
+        }
+        else if (msg == 0x0312 && wParam.ToInt32() == RecHotkeyId)
+        {
+            ToggleGameRecording();
             handled = true;
         }
         else if (msg == 0x0219) // WM_DEVICECHANGE
@@ -1389,7 +1398,10 @@ public partial class MainWindow : Window
         var f = _frames.GetForegroundStats();
         if (_overlay != null && _overlay.IsVisible)
         {
-            _overlay.Update(f, BuildOverlayLines(f), OvShow, OvShow.Contains("clock") ? DateTime.Now.ToString("HH:mm") : null);
+            // Rodapé: "● REC" durante a gravação (para saber dentro do jogo que está gravando) e/ou a hora.
+            var foot = string.Join("  ·  ", new[] { RecOverlayText(), OvShow.Contains("clock") ? DateTime.Now.ToString("HH:mm") : null }
+                                               .Where(x => x != null));
+            _overlay.Update(f, BuildOverlayLines(f), OvShow, foot.Length > 0 ? foot : null);
             _overlay.KeepOnTop(); // o jogo pode ter passado na frente (janela sem borda "sempre no topo")
         }
         UpdateOverlayStatus(f);
@@ -1417,7 +1429,8 @@ public partial class MainWindow : Window
     private void UpdateSensorDemand()
     {
         bool minimized = WindowState == WindowState.Minimized;
-        bool backgroundUse = ChkOverlay.IsChecked == true || _stress.Running || _burn.Running || _lightTimer?.IsEnabled == true;
+        bool backgroundUse = ChkOverlay.IsChecked == true || _stress.Running || _burn.Running || _lightTimer?.IsEnabled == true
+                             || GameRecording;
         _monitor.Mode = minimized && !backgroundUse ? SensorMode.Economy : SensorMode.Normal;
 
         bool listOpen = !minimized && (PageSensors.IsVisible || PageGpu.IsVisible);

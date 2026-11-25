@@ -1,3 +1,17 @@
+## Fork · Gravação de sessão de jogo
+
+- **Gravar jogando, não só em benchmark:** botão GRAVAR na página Overlay ou **Ctrl + Shift + F9** dentro do jogo.
+  Com o overlay ligado, aparece "● REC" com o tempo de gravação.
+- **O que grava:** a cada segundo, FPS, 1% low da janela, frametime, temperatura/carga/consumo/clock da CPU
+  (incluindo o núcleo mais usado), temperatura/hot spot/carga/consumo/clock da GPU, VRAM, RAM e a classificação
+  de gargalo. Também grava **cada frame** do jogo, para calcular o FPS médio, o 1% low e o 0,1% low reais da sessão.
+- **Ao parar:** salva sozinho em Documentos\ResetExplode\Sessões\<data>_<jogo>\ os arquivos `sessao.csv`
+  (um segundo por linha), `frametimes.csv` (todos os frames) e `relatorio.pdf` (resumo, gráficos de FPS, frametime,
+  temperatura e carga, e os 10 piores frames). Fechar o app gravando também salva.
+- **Contas:** pausas acima de 1 s (alt-tab, loading) ficam fora; engasgo = frame 2,5× mais lento que a média dos
+  60 anteriores e pelo menos 8 ms acima dela.
+- **Testes:** `Tests/GameTests` confere as contas com valores conhecidos e gera um relatório a partir de um log do HWiNFO.
+
 ## Fork · Cores e relatório do stress test
 
 - **Cores com significado:** temperaturas da CPU e da GPU ficam amarelas a 10 °C do limite e vermelhas a 3 °C;

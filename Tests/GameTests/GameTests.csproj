@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Testes da gravação de sessão de jogo (GameSession.cs): contas de FPS/1% low/engasgos com valores conhecidos
+    e um relatório de exemplo a partir de um log real do HWiNFO.
+    Rodar: dotnet run -c Release (pasta Tests/GameTests) [log CSV do HWiNFO] [pasta de saída]
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\GameSession.cs" Link="Engine\GameSession.cs" />
+    <Compile Include="..\..\SimplePdf.cs" Link="Engine\SimplePdf.cs" />
+  </ItemGroup>
+
+</Project>
